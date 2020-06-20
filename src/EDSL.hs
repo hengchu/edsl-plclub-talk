@@ -7,6 +7,7 @@ infixr 2 .||
 infixr 3 .&&
 infix  4 .==, ./=, .<, .<=, .>, .>=
 class SynBool a where
+  neg   :: a -> a
   (.&&) :: a -> a -> a
   (.||) :: a -> a -> a
 
@@ -75,6 +76,7 @@ data Expr :: * -> * where
   NumAbs  :: Num a => Expr a -> Expr a
   Signum  :: Num a => Expr a -> Expr a
 
+  Neg    :: SynBool bool => Expr bool -> Expr bool
   And    :: SynBool bool => Expr bool -> Expr bool -> Expr bool
   Or     :: SynBool bool => Expr bool -> Expr bool -> Expr bool
   Branch :: (Typeable bool, SynBool bool) => Expr bool -> Expr a -> Expr a -> Expr a
@@ -135,10 +137,12 @@ instance Num a => Num (Expr a) where
   fromInteger = Val . fromInteger
 
 instance SynBool Bool where
+  neg = not
   (.&&) = (&&)
   (.||) = (||)
 
 instance SynBool a => SynBool (Expr a) where
+  neg = Neg
   (.&&) = And
   (.||) = Or
 
