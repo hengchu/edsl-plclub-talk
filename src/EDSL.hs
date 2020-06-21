@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module EDSL where
 
 import Control.Monad
@@ -167,16 +169,59 @@ instance SynOrd a => SynOrd (Expr a) where
   (.>)  = IsGt
 
 -- Now we can write something like this
-ex1 :: MonadGetInt int m => Expr int -> ExprM m int
+ex1 :: forall m int. MonadGetInt int m => Expr int -> ExprM m int
 ex1 x = do
   y <- getInt
   return (x + y)
 
-ex2 :: (SynOrd int,
-        MonadGetInt int m,
-        Typeable (SynBoolType int)) => Expr int -> ExprM m int
+ex2 :: forall m int.
+  (SynOrd int,
+   MonadGetInt int m,
+   Typeable (SynBoolType int)) => Expr int -> ExprM m int
 ex2 x = do
   if_ (x .> 5) (crash "x is too large") $ do
     y <- getInt
     if_ (y .> 5) (crash "y is too large") $
       return (x + y)
+
+ex3 :: forall m int.
+  (SynOrd int,
+   MonadGetInt int m,
+   Typeable (SynBoolType int)) => Expr int -> ExprM m int
+ex3 x = do
+  if_ (x .> 10)
+    (crash "x > 10")
+    (ex3 (x + 1))
+
+-- Does not terminate.
+ex4 :: forall m int.
+  (SynOrd int,
+   MonadGetInt int m,
+   Typeable (SynBoolType int)) => Expr int -> ExprM m int
+ex4 x = do
+  y <- if_ (x .> 10)
+    (ex4 (x - 1))
+    (crash "x <= 10")
+  return y
+
+ex5 :: forall m int.
+  (MonadGetInt int m,
+   SynOrd int,
+   Typeable (SynBoolType int)) => ExprM m int
+ex5 = do
+  x1 <- getInt
+  x2 <- getInt
+  x3 <- getInt
+  if_ (x1 + x2 .> x3)
+    (return (x1 + x2))
+    (crash "failed")
+
+ex6 :: forall m int.
+  (MonadGetInt int m,
+   SynOrd int,
+   Typeable (SynBoolType int)) => ExprM m int
+ex6 = do
+  x <- getInt
+  if_ (x .> (10 :: Expr int))
+    ex6
+    (crash "x <= 10")

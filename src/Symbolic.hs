@@ -3,6 +3,8 @@ module Symbolic where
 import EDSL
 import Control.Monad.State.Lazy
 import Type.Reflection hiding (App)
+import Data.List
+import Debug.Trace
 
 data SExp :: * where
   SVal    :: Int  -> SExp
@@ -46,6 +48,9 @@ instance SynOrd SExp where
   a .>= b = SBool (SGe a b)
   a .> b  = SBool (SGt a b)
 
+instance MonadGetInt SInt Symbolic where
+  getInt = freshSInt "sint"
+
 newtype SInt = SInt SExp
   deriving (SynOrd, Num) via SExp
   deriving (Show, Eq, Ord)
@@ -58,8 +63,14 @@ newtype Symbolic a = Symbolic { runSymbolic_ :: State Int a }
   deriving (Functor, Applicative, Monad) via (State Int)
   deriving (MonadState Int) via (State Int)
 
-runSymbolic :: Symbolic a -> a
-runSymbolic = flip evalState 0 . runSymbolic_
+evalSymbolic :: Symbolic a -> a
+evalSymbolic = flip evalState 0 . runSymbolic_
+
+runSymbolic :: Int -> Symbolic a -> (a, Int)
+runSymbolic st = flip runState st . runSymbolic_
+
+purify :: Symbolic a -> (Int -> (a, Int))
+purify = flip runSymbolic
 
 freshSVar :: String -> Symbolic SExp
 freshSVar name = do
@@ -89,10 +100,8 @@ isGetInt :: Some Expr -> Bool
 isGetInt (Some GetInt) = True
 isGetInt _ =  False
 
-interleave :: [a] -> [a] -> [a]
-interleave (x:xs) (y:ys) = x:y:interleave xs ys
-interleave xs     []     = xs
-interleave []     ys     = ys
+interleaveAll :: [[a]] -> [a]
+interleaveAll = concat . transpose
 
 inf1 :: [Symbolic SInt]
 inf1 = repeat (freshSInt "x")
@@ -109,12 +118,12 @@ stepBinop a b combine =
     PendingGetInt k -> PendingGetInt (\sint -> combine (k sint) b)
     Crashed         -> Crashed
 
-isNormal :: Expr a -> Bool
-isNormal (step -> Normal) = True
+isNormal :: Step (Expr a) -> Bool
+isNormal Normal = True
 isNormal _ = False
 
-isCrashed :: Expr a -> Bool
-isCrashed (step -> Crashed) = True
+isCrashed :: Step (Expr a) -> Bool
+isCrashed Crashed = True
 isCrashed _ = False
 
 data Step a where
@@ -148,7 +157,13 @@ step GetInt =
 step (Return a) = Return <$> step a
 step (App (Abs f) e@(Val _)) = Stepped (f e)
 step (App f e) = stepBinop f e App
-step (Bind (Return e) f) | isNormal e = Stepped (f e)
+step (Bind (Return e) f) =
+  case step e of
+    Stepped e' -> Stepped (Bind (Return e') f)
+    Normal     -> Stepped (f e)
+    Crashed    -> Crashed
+    PendingBranch scond k -> PendingBranch scond (\c -> Bind (Return (k c)) f)
+    PendingGetInt k -> PendingGetInt (f . k)
 step (Bind m f) = fmap (\m' -> Bind m' f) (step m)
 step (NumAdd (Val a) (Val b)) = Stepped (Val (a + b))
 step (NumAdd a b) = stepBinop a b NumAdd
@@ -178,3 +193,36 @@ step (IsGt (Val a) (Val b)) = Stepped (Val (a .> b))
 step (IsGt a b) = stepBinop a b IsGt
 step (IsGe (Val a) (Val b)) = Stepped (Val (a .>= b))
 step (IsGe a b) = stepBinop a b IsGe
+
+type PathConditions = [SBool]
+
+data Work a where
+  Continue :: Int -> PathConditions -> Expr a -> Work a
+
+iter' :: [Work a] -> ([PathConditions], [Work a])
+iter' = go [] []
+  where go crashConds ks [] = (crashConds, ks)
+        go crashConds ks (Continue st conds e:xs) =
+          case step e of
+            Stepped e' -> go crashConds (Continue st conds e':ks) xs
+            PendingBranch c k ->
+              go
+                crashConds
+                (Continue st (c:conds)     (k True):
+                 Continue st (neg c:conds) (k False):
+                 ks) xs
+            PendingGetInt k ->
+              let (term, st') = runSymbolic st (freshSInt "sint" >>= return . k)
+              in go crashConds (Continue st' conds term:ks) xs
+            Normal -> go crashConds ks xs
+            Crashed -> go (conds:crashConds) ks xs
+
+searchCrashConditions :: [Work a] -> [PathConditions]
+searchCrashConditions [] = []
+searchCrashConditions work =
+  case iter' work of
+    (crashConds, moreWork) ->
+      crashConds ++ (searchCrashConditions moreWork)
+
+seval :: Expr a -> [PathConditions]
+seval e = searchCrashConditions [Continue 0 [] e]
