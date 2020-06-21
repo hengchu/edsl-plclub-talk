@@ -27,7 +27,7 @@ class Syntactic (a :: *) where
   toDeepRepr   :: a -> Expr (DeepType a)
   fromDeepRepr :: Expr (DeepType a) -> a
 
-class (Monad m, Num int) => MonadGetInt int m where
+class (Monad m, Typeable m, Typeable int, Num int) => MonadGetInt int m where
   getInt :: m int
 
 newtype Codensity (m :: * -> *) (a :: *) = Codensity {
