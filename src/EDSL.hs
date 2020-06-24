@@ -247,8 +247,8 @@ ex8 :: forall m int.
    Typeable (SynBoolType int)) => ExprM m int
 ex8 = do
   x <- getInt
-  if_ (fac x .== 10)
-    (crash "x! = 10")
+  if_ (x .== fac 10)
+    (crash "x = 10!")
     (return 0)
 
 linearSystem :: forall int.
@@ -290,3 +290,27 @@ ex10 = do
   if_ (quadraticSystem x y)
     (crash "solved")
     (return 0)
+
+fac2 :: forall int. Num int => Int -> Expr int
+fac2 n = product (map fromIntegral [1..n])
+
+ex11 ::
+  forall m int.
+  (MonadGetInt int m,
+   SynOrd int,
+   Typeable (SynBoolType int)) => ExprM m int
+ex11 = do
+  x <- getInt
+  if_ (x .== fac2 10)
+    (crash "x = 10!")
+    (return 0)
+
+ex12 :: forall int.
+  (SynOrd int,
+   Num int,
+   Typeable (SynBoolType int)) => Expr int -> Expr int
+ex12 x =
+  if_ (x .== 0) 1
+      (if_ (x .> 0)
+           (x * ex12 (x - 1))
+           (crash "x is negative"))

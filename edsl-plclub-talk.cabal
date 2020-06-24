@@ -32,6 +32,7 @@ library
                 , Concrete
                 , Symbolic
                 , Solver
+                , Simple
   other-modules:
                 Paths_edsl_plclub_talk
   default-extensions:
