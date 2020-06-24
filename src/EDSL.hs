@@ -225,3 +225,48 @@ ex6 = do
   if_ (x .> (10 :: Expr int))
     ex6
     (crash "x <= 10")
+
+ex7 :: forall m int.
+  (MonadGetInt int m,
+   SynOrd int,
+   Typeable (SynBoolType int)) => ExprM m int
+ex7 = do
+  x <- getInt
+  if_ (abs x .< 0)
+    (crash "impossible: absolute value is negative")
+    (return x)
+
+fac :: forall int.
+  (Num int, SynOrd int, Typeable (SynBoolType int)) => Expr int -> Expr int
+fac x =
+  if_ (x .<= 0) 1 (x * fac (x-1))
+
+ex8 :: forall m int.
+  (MonadGetInt int m,
+   SynOrd int,
+   Typeable (SynBoolType int)) => ExprM m int
+ex8 = do
+  x <- getInt
+  if_ (fac x .== 10)
+    (crash "x! = 10")
+    (return 0)
+
+linearSystem :: forall int.
+  (Num int,
+   SynOrd int,
+   Typeable (SynBoolType int))
+  => Expr int -> Expr int -> Expr (SynBoolType int)
+linearSystem x y =
+  x + y .== 5
+  .&& x - 2*y .== -4
+
+ex9 :: forall m int.
+  (MonadGetInt int m,
+   SynOrd int,
+   Typeable (SynBoolType int)) => ExprM m int
+ex9 = do
+  x <- getInt
+  y <- getInt
+  if_ (linearSystem x y)
+    (crash "solved")
+    (return 0)

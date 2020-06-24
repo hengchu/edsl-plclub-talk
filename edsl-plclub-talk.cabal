@@ -31,6 +31,7 @@ library
                 , EDSL
                 , Concrete
                 , Symbolic
+                , Solver
   other-modules:
                 Paths_edsl_plclub_talk
   default-extensions:
@@ -80,6 +81,7 @@ library
                 base >=4.7 && <5
               , z3 >= 408.1 && < 409
               , mtl >= 2.2.2 && < 2.3
+              , containers >= 0.6.2.1 && < 0.7
   default-language: Haskell2010
 
 executable edsl-plclub-talk-exe
