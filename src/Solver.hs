@@ -4,6 +4,11 @@ import Symbolic
 import Z3.Monad
 import Data.Foldable
 import Data.Map
+import Control.Monad.IO.Class
+import System.Console.ANSI
+import Control.Concurrent
+import Control.Monad
+import Control.Concurrent.Async
 
 toZ3Binop :: MonadZ3 z3 => SExp -> SExp -> (AST -> AST -> z3 AST) -> z3 AST
 toZ3Binop a b f = do
@@ -81,5 +86,43 @@ modelMap m = do
 check :: MonadZ3 z3 => PathConditions -> z3 (Maybe (Map String Int))
 check conds = check' conds >>= traverse modelMap
 
+untilCrashed :: MonadZ3 z3 => [PathConditions] -> z3 (Maybe (Map String Int))
+untilCrashed [] = return Nothing
+untilCrashed (c:cs) = do
+  r <- Solver.check c
+  case r of
+    Nothing -> untilCrashed cs
+    Just m -> return (Just m)
+
 checkIO :: PathConditions -> IO (Maybe (Map String Int))
 checkIO = evalZ3 . Solver.check
+
+untilCrashedIO :: [PathConditions] -> IO (Maybe (Map String Int))
+untilCrashedIO conds = do
+  r <- race (evalZ3 $ Solver.untilCrashed conds)
+            asciiProgress
+  case r of
+    Left (Just m) -> return (Just m)
+    Left Nothing -> do
+      putStrLn "exhausted all control flow paths and could not find satisfiable crash conditions"
+      return Nothing
+    Right _ -> error "impossible"
+
+asciiProgress :: IO ()
+asciiProgress = do
+  Just (x, y) <- getCursorPosition
+  forever $ do
+    putStrLn "-"
+    threadDelay 1000000
+    clearLine
+    setCursorPosition x y
+
+    putStrLn "/"
+    threadDelay 1000000
+    clearLine
+    setCursorPosition x y
+
+    putStrLn "\\"
+    threadDelay 1000000
+    clearLine
+    setCursorPosition x y
