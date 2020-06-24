@@ -270,3 +270,23 @@ ex9 = do
   if_ (linearSystem x y)
     (crash "solved")
     (return 0)
+
+quadraticSystem :: forall int.
+  (Num int,
+   SynOrd int,
+   Typeable (SynBoolType int))
+  => Expr int -> Expr int -> Expr (SynBoolType int)
+quadraticSystem x y =
+  x * x + y .== 5
+  .&& x - y*y .== 1
+
+ex10 :: forall m int.
+  (MonadGetInt int m,
+   SynOrd int,
+   Typeable (SynBoolType int)) => ExprM m int
+ex10 = do
+  x <- getInt
+  y <- getInt
+  if_ (quadraticSystem x y)
+    (crash "solved")
+    (return 0)
